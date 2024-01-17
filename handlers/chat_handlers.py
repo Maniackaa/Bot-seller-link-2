@@ -2,7 +2,8 @@ import datetime
 import json
 
 from aiogram import Router, Bot, F
-from aiogram.filters import Command, StateFilter, BaseFilter
+from aiogram.enums import ChatMemberStatus
+from aiogram.filters import Command, StateFilter, BaseFilter, or_f
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
@@ -38,10 +39,23 @@ class IsFromGroup(BaseFilter):
               )
         return str(message.chat.id) in self.moderator_chat_id
 
+class IsAdminPrivate(BaseFilter):
+    def __init__(self) -> None:
+        self.GROUP_ID = int(conf.tg_bot.GROUP_ID)
+
+    async def __call__(self, message: Message, event_from_user, bot: Bot, *args, **kwargs) -> bool:
+        if isinstance(message, CallbackQuery):
+            message = message.message
+        member = await bot.get_chat_member(chat_id=self.GROUP_ID, user_id=event_from_user.id)
+        status = member.status
+        print(status)
+        is_moderator = status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+        return is_moderator and message.chat.type == 'private'
+
 
 router = Router()
-router.message.filter(IsFromGroup())
-router.callback_query.filter(IsFromGroup())
+router.message.filter(or_f(IsFromGroup(), IsAdminPrivate()))
+router.callback_query.filter(or_f(IsFromGroup(), IsAdminPrivate()))
 
 
 class FSMAdmin(StatesGroup):
@@ -387,6 +401,7 @@ async def links_period(callback: CallbackQuery, state: FSMContext, bot: Bot):
 @router.callback_query(F.data.startswith('link_view_change:'))
 async def link_view_change(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.debug(callback.data)
+    await callback.message.delete()
     link_id = int(callback.data.split('link_view_change:')[1])
     link = get_link_from_id(link_id)
     if link.view_count:
@@ -395,7 +410,7 @@ async def link_view_change(callback: CallbackQuery, state: FSMContext, bot: Bot)
         return
     cpm = link.owner.cpm
     await state.update_data(link_id=link_id, cpm=cpm)
-    await callback.message.answer(f'Текущий CPM: {cpm}\nВведите количество просмотров')
+    await callback.message.answer(f'Текущий CPM: {cpm}\nВведите количество просмотров для ролика {link.id} пользователя {link.owner.username}')
     await state.set_state(FSMWebUserMenu.change_view)
 
 
@@ -468,6 +483,7 @@ async def deactivate(callback: CallbackQuery, state: FSMContext, bot: Bot):
 @router.callback_query(F.data.startswith('deactivate_'))
 async def deactivate_(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.debug(callback.data)
+    await callback.message.delete()
     mode = callback.data.split('deactivate_')[1]
     data = await state.get_data()
     user_id = data.get('user_id')

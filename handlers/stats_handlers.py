@@ -25,4 +25,4 @@ async def stats(callback: CallbackQuery, state: FSMContext, bot: Bot):
     text += '\nСтатистика за 2 недели:\n'
     all_link = get_links(14)
     text += get_stats(all_link)
-    await callback.message.edit_text(text=text)
+    await callback.message.edit_text(text=text, reply_markup=admin_start_kb)
