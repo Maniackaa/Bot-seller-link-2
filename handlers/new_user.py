@@ -55,6 +55,14 @@ class FSMAnket(StatesGroup):
             False
         ),
         (
+            ' Какой у вас источник?',
+            ('ютуб',
+             'инстаграм',
+             'тикток'
+             ),
+            False
+        ),
+        (
             'Сколько просмотров в у вас было за предыдущий месяц в сумме со всех каналов?',
             ('до миллиона',
              'от 1 до 5 миллионов',
@@ -67,7 +75,7 @@ class FSMAnket(StatesGroup):
             False
         ),
         (
-            'отправьте в этот чат ваши каналы (списком из ссылок) на изучение',
+            'Укажите ваш канал. Если хотите подать несколько каналов, подавайте их списком',
             '',
             False
         ),
@@ -84,6 +92,14 @@ def get_question_kb_button(question__num):
     return reply_markup
 
 
+@router.callback_query(F.data == 'cancel')
+async def operation_in(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug('new user cancel')
+    await callback.message.delete()
+    await state.clear()
+    await callback.message.answer('Введите /start для начала работы', reply_markup=not_auth_start_kb)
+
+
 @router.message(Command(commands=["start"]))
 async def process_start_command(message: Message, state: FSMContext):
     logger.debug('new')
@@ -98,7 +114,7 @@ async def process_start_command(message: Message, state: FSMContext):
             await message.answer('Какой тип контента вы создаете (SHORTS, полноформатные видео)?',
                                  reply_markup=get_question_kb_button(0))
         else:
-            await message.answer('После того как вы начали выкладывать видео, пожалуйста, отправляйте мне ссылки на каждый ваш новый ролик через команду из меню', reply_markup=menu_kb)
+            await message.answer('Теперь, когда вы будете выкладывать видео, вы должны их скинуть в этот чат и указать дату на момент выкладки ролика в формате (01.01.2024)', reply_markup=start_kb)
     except Exception as err:
         logger.error(err)
 
@@ -194,7 +210,7 @@ async def questions_text(message: Message, state: FSMContext, bot: Bot):
 
 def format_request(user, answers):
 
-    msg = f'Заявка от @{user.username or user.tg_id}):\n'
+    msg = f'Новая заявка от @{user.username or user.tg_id}):\n'
     for answer in answers:
         msg += f'{answer}\n\n'
     return msg
@@ -216,8 +232,9 @@ async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
         request.set('msg', request_msg.model_dump_json())
         await state.clear()
 
-        end_answer = """Пока мы изучаем вашу заявку, вступите пока в наш телеграм канал: https://t.me/+IxdcozjtVdI1OTNk
-Там вы сможете ознакомиться с нашими условиями в закрепленном комментарии.
+        end_answer = """Спасибо. 
+Пока мы изучаем вашу заявку, вступите пока в наш телеграм канал: https://t.me/+IxdcozjtVdI1OTNk
+Там вы сможете ознакомиться с нашими условиями в закрепленном комментарии .
 """
         await callback.message.answer(end_answer)
     except Exception as err:

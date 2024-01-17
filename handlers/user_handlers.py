@@ -1,4 +1,6 @@
 import asyncio
+import datetime
+from sqlite3 import IntegrityError
 
 from aiogram import Dispatcher, types, Router, Bot, F
 from aiogram.filters import Command, CommandStart, StateFilter, BaseFilter
@@ -13,7 +15,7 @@ from handlers.new_user import FSMCheckUser, FSMAnket
 from keyboards.keyboards import start_kb, contact_kb, admin_start_kb, custom_kb, menu_kb, kb_list
 from lexicon.lexicon import LEXICON
 from services.db_func import get_or_create_user, update_user, create_links, get_link_from_id, create_work_link_request, \
-    get_work_request_from_id, create_cash_outs, get_cash_out_from_id
+    get_work_request_from_id, create_cash_outs, get_cash_out_from_id, create_link
 from services.func import get_all_time_cash, get_all_worked_link
 
 logger, err_log = get_my_loggers()
@@ -33,6 +35,7 @@ router.message.filter(IsPrivate())
 
 class FSMUser(StatesGroup):
     send_link = State()
+    input_date = State()
 
 class FSMCash(StatesGroup):
     cost = State()
@@ -63,61 +66,90 @@ class FSMCash(StatesGroup):
 #     return 'data'
 
 
-# @router.callback_query(F.data == 'send_link')
-# async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
-#     await callback.message.edit_text('Вставьте ссылки')
-#     await state.set_state(FSMUser.send_link)
-@router.message(F.text == kb_list[0])
-async def instructions(message: Message, state: FSMContext):
-    await message.answer('Вставьте ссылки (одна ссылка на строке)', reply_markup=ReplyKeyboardRemove())
+@router.callback_query(F.data == 'send_link')
+async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
+    await callback.message.answer('Вставьте ссылку')
     await state.set_state(FSMUser.send_link)
+
+# @router.message(F.text == kb_list[0])
+# async def instructions(message: Message, state: FSMContext):
+#     await message.answer('Вставьте ссылки (одна ссылка на строке)', reply_markup=ReplyKeyboardRemove())
+#     await state.set_state(FSMUser.send_link)
 
 
 @router.message(StateFilter(FSMUser.send_link))
-async def receive_link(message: Message, state: FSMContext):
-    raw_links = message.text.split('\n')
-    raw_links = [link.strip() for link in raw_links]
-    links = []
-    for link in raw_links:
-        if 'http' in link:
-            links.append(link)
-    if links:
-        await state.update_data(links=links)
-        confirm_btn = {
-            'Отменить': 'cancel',
-            'Отправить': 'link_confirm'
-        }
-        text = 'Подтвердите отправку ссылок:\n'
-        text += '\n'.join(links)
-        await message.answer(text, reply_markup=custom_kb(2, confirm_btn))
-    else:
-        await message.answer('Не корректные сылки', reply_markup=menu_kb)
-        await state.clear()
-
-
-@router.callback_query(StateFilter(FSMUser.send_link), F.data == 'link_confirm')
-async def link_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    await callback.message.edit_reply_markup(None)
-    data = await state.get_data()
-    links = data.get('links')
-    user = get_or_create_user(callback.from_user)
-    link_ids = create_links(user, links)
-    # await callback.message.delete()
-    # Отправка на модерацию:
-    for link_id in link_ids:
+async def receive_link(message: Message, state: FSMContext, bot: Bot):
+    link = message.text.strip()
+    if 'http' in link:
+        await state.update_data(link=link)
+        user = get_or_create_user(message.from_user)
+        link_type = ''
+        if 'tiktok.com' in link:
+            link_type = 'tiktok'
+        elif 'instagram.com' in link:
+            link_type = 'instagram'
+        elif 'youtube.com' in link:
+            link_type = 'youtube'
+        link_id = create_link(user, link, link_type)
+        if not link_type:
+            await message.answer('Некорректная ссылка')
+            await state.clear()
+            return
+        if not link_id:
+            await message.answer('Такая ссылка уже есть')
+            await state.clear()
+            return
+        # Отправка на модерацию:
         link = get_link_from_id(link_id)
-        # text = f'Ссылка № {link_id} от {user.username or user.tg_id}:\n{link.link}'
         text = f'Юзер @{user.username or user.tg_id} выпустил новый ролик.\n{link.link}'
-        btn = {'Подтвердить': f'link_confirm_{link_id}', 'Отклонить': f'link_reject_{link_id}'}
+        # btn = {'Подтвердить': f'link_confirm_{link_id}', 'Отклонить': f'link_reject_{link_id}'}
         # msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
         msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text)
+        # msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text)
         logger.debug(f'Ссылка {link_id} отправлена')
         link.set('msg', msg.model_dump_json())
         link.set('status', 'moderate')
         await asyncio.sleep(0.2)
-    await callback.message.answer('Ссылки отправлены.', reply_markup=menu_kb)
-    # await callback.message.answer('Чат для модераторов: https://t.me/+llTdzJJuK0kwN2My')
-    await state.clear()
+        await message.answer('Ссылка отправлена.', reply_markup=start_kb)
+        # await callback.message.answer('Чат для модераторов: https://t.me/+llTdzJJuK0kwN2My')
+        await state.clear()
+    else:
+        await message.answer('Не корректные сылки', reply_markup=start_kb)
+        await state.clear()
+
+
+@router.message(StateFilter(FSMUser.input_date))
+async def input_date(message: Message, state: FSMContext, bot: Bot):
+    try:
+        date = datetime.datetime.strptime(message.text.strip(), '%d.%m.%Y').date()
+        data = await state.get_data()
+        link = data.get('link')
+        user = get_or_create_user(message.from_user)
+        link_id = create_link(user, link, date)
+        # Отправка на модерацию:
+        link = get_link_from_id(link_id)
+        text = f'Юзер @{user.username or user.tg_id} выпустил новый ролик.\n{link.link}'
+        # btn = {'Подтвердить': f'link_confirm_{link_id}', 'Отклонить': f'link_reject_{link_id}'}
+        # msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
+        msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text)
+        # msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text)
+        logger.debug(f'Ссылка {link_id} отправлена')
+        link.set('msg', msg.model_dump_json())
+        link.set('status', 'moderate')
+        await asyncio.sleep(0.2)
+        await message.answer('Ссылка отправлена.', reply_markup=start_kb)
+        # await callback.message.answer('Чат для модераторов: https://t.me/+llTdzJJuK0kwN2My')
+        await state.clear()
+
+    except ValueError:
+        await message.answer('Введите дату в формате 01.01.2024')
+    except Exception as err:
+        logger.error(err)
+        await message.answer('Такая ссылка уже есть')
+        await state.clear()
+
+
 
 
 # Аккаунт
@@ -260,57 +292,61 @@ async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: 
 # Запрос на вывод средств
 @router.callback_query(F.data == 'cash_out')
 async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+
     btn = {
         'Подтвердить': 'cash_out_confirm',
         'Отменить': 'cancel'
     }
     user = get_or_create_user(callback.from_user)
-
     cash = user.cash
     text = f'Ваш баланс: {cash}\nОставить заявку на вывод?'
-    if cash >= 1000:
+    if cash > 0:
         await callback.message.edit_text(text, reply_markup=custom_kb(2, btn))
     else:
-        await callback.message.answer('Минимальная сумма вывода 1000 р.')
+        await callback.message.edit_text('Недостаточный баланс')
 
 
 @router.callback_query(F.data == 'cash_out_confirm')
 async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.message.delete()
     await state.set_state(FSMCash.cost)
-    await callback.message.answer('Введите сумму')
+    await callback.message.answer('Укажите свой usdt trc20 кошелек')
 
 
 @router.message(StateFilter(FSMCash.cost))
 async def cash_cost(message: Message, state: FSMContext):
-    cost = message.text.strip()
+    trc20 = message.text.strip()
     try:
-        cost = int(cost)
-        if cost >= 1000:
-            btn = {
-                'Подтвердить': f'cash_out_send',
-                'Отменить': 'cancel'
-            }
-            await state.update_data(cost=cost)
-            await message.answer(f'Отправить заявку на вывод {cost} р.?', reply_markup=custom_kb(2, btn))
-        else:
-            await message.answer(f'Сумма должна быть не менее 1000 р.')
+        btn = {
+            'Подтвердить': f'cash_out_send',
+            'Отменить': 'cancel'
+        }
+        user = get_or_create_user(message.from_user)
+        await state.update_data(trc20=trc20, cash=user.cash)
+        await message.answer(f'Отправить заявку на вывод {user.cash} р. на кошелек {trc20}?', reply_markup=custom_kb(2, btn))
     except Exception as err:
-        await message.answer('Некорректная сумма. Введите корректную сумму')
+        await message.answer('Произошла ошибка')
+        await state.clear()
 
 
 @router.callback_query(F.data == 'cash_out_send')
 async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    await callback.message.delete()
-    data = await state.get_data()
-    cost = data['cost']
-    user = get_or_create_user(callback.from_user)
-    cash_out_id = create_cash_outs(user.id, cost)
-    btn = {'Подтвердить': f'cash_out_confirm:{cash_out_id}',
-           'Отклонить': f'cash_out_reject:{cash_out_id}'}
-    await callback.message.answer(f'Ваша заявка № {cash_out_id} на вывод {cost} р. отправлена')
-    text = f'Заявка № {cash_out_id} на вывод {cost} р. от @{user.username or user.tg_id}'
-    msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
-    cash_out = get_cash_out_from_id(cash_out_id)
-    cash_out.set('msg', msg.model_dump_json())
-    await state.clear()
+    try:
+        await callback.message.delete()
+        data = await state.get_data()
+        cash = data['cash']
+        trc20 = data['trc20']
+        user = get_or_create_user(callback.from_user)
+        user.set('cash', 0)
+        cash_out_id = create_cash_outs(user.id, cash, trc20)
+        btn = {'Подтвердить': f'cash_out_confirm:{cash_out_id}',
+               'Отклонить': f'cash_out_reject:{cash_out_id}'}
+        await callback.message.answer(f'Ваша заявка № {cash_out_id} на вывод {cash} р. отправлена')
+        text = f'Заявка № {cash_out_id} на вывод {cash} р. от @{user.username or user.tg_id} на кошелек {trc20}'
+        msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
+        cash_out = get_cash_out_from_id(cash_out_id)
+        cash_out.set('msg', msg.model_dump_json())
+        await state.clear()
+    except Exception as err:
+        logger.error(err)
+        err_log.error(err, exc_info=True)

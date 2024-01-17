@@ -1,45 +1,45 @@
 version: '3'
 
 volumes:
-  pg_data:
+  pg_data2:
   pgadmin_data:
   redis_data:
 
 services:
-  db_postgres:
+  db_postgres2:
     container_name: db_seller2
     image: postgres:14-alpine
     env_file: .env
     volumes:
       - ./postgres/init_db:/docker-entrypoint-initdb.d
 #      - ./postgres/postgres-data.conf/:/var/lib/postgresql/data
-#      - pg_data:/var/lib/postgresql/data
-      - ./postgres/postgres-data/:/var/lib/postgresql/data
+      - pg_data2:/var/lib/postgresql/data
+#      - ./postgres/postgres-data/:/var/lib/postgresql/data
     ports:
       - "35432:5432"
     restart: always
 
 
-  pgadmin:
-    container_name: pgadmin_container_seller2
-    image: dpage/pgadmin4:7.3
-    env_file: .env
-    environment:
-      PGADMIN_DEFAULT_EMAIL: $PGADMIN_DEFAULT_EMAIL
-      PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
-
-    depends_on:
-      - db_postgres
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    ports:
-      - "5050:80"
-    restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 1G
+#  pgadmin:
+#    container_name: pgadmin_container_seller2
+#    image: dpage/pgadmin4:7.3
+#    env_file: .env
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: $PGADMIN_DEFAULT_EMAIL
+#      PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
+#
+#    depends_on:
+#      - db_postgres
+#    volumes:
+#      - pgadmin_data:/var/lib/pgadmin
+#    ports:
+#      - "5050:80"
+#    restart: always
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.5'
+#          memory: 1G
 
 #  redis:
 #    container_name: redis_seller
@@ -65,6 +65,6 @@ services:
     env_file: .env
     depends_on:
 #      - redis
-      - db_postgres
+      - db_postgres2
     volumes:
       - ./:/app

@@ -2,6 +2,7 @@ import asyncio
 import datetime
 
 from sqlalchemy import select, delete
+from sqlalchemy.exc import IntegrityError
 
 from config_data.bot_conf import get_my_loggers
 from database.db import Session, User, Request, Link, WorkLinkRequest, WorkLink, CashOut
@@ -107,6 +108,22 @@ def create_links(user: User, links: list):
         return link_ids
 
 
+def create_link(user: User, link, link_type):
+    session = Session()
+    try:
+        with session:
+            link = Link(owner_id=user.id,
+                        link=link,
+                        link_type=link_type
+                        )
+            session.add(link)
+            session.commit()
+            logger.debug('Запрос сохранен')
+            return link.id
+    except IntegrityError as err:
+        logger.error(err)
+
+
 def create_work_link_request(user: User):
     session = Session()
     with session:
@@ -130,12 +147,14 @@ def create_work_link(user_id, link, moderator_id):
 
 
 def get_link_from_id(pk) -> Link:
-    session = Session()
-    with session:
-        q = select(Link).filter(Link.id == pk)
-        link = session.execute(q).scalars().one_or_none()
-        return link
-
+    try:
+        session = Session()
+        with session:
+            q = select(Link).filter(Link.id == pk)
+            link = session.execute(q).scalars().one_or_none()
+            return link
+    except Exception as err:
+        logger.error(err)
 
 def get_reg_from_id(pk) -> Request:
     session = Session()
@@ -153,10 +172,10 @@ def get_work_request_from_id(pk) -> WorkLinkRequest:
         return reg
 
 
-def create_cash_outs(user_id, cost) -> int:
+def create_cash_outs(user_id, cost, trc20) -> int:
     session = Session()
     with session:
-        cash_out = CashOut(user_id=user_id, cost=cost)
+        cash_out = CashOut(user_id=user_id, cost=cost, trc20=trc20)
         session.add(cash_out)
         session.commit()
         logger.debug('Запрос на вывод сохранен')
