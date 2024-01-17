@@ -6,7 +6,7 @@ import aioschedule
 
 from config_data.bot_conf import conf, get_my_loggers
 
-from handlers import user_handlers, echo, new_user, chat_handlers, admin_handlers
+from handlers import user_handlers, echo, new_user, chat_handlers, admin_handlers, stats_handlers
 
 logger, err_log = get_my_loggers()
 
@@ -27,9 +27,9 @@ async def main():
     # Регистрируем
     dp.include_router(chat_handlers.router)
     dp.include_router(admin_handlers.router)
-
     dp.include_router(new_user.router)
     dp.include_router(user_handlers.router)
+    dp.include_router(stats_handlers.router)
     dp.include_router(echo.router)
 
     await bot.delete_webhook(drop_pending_updates=True)

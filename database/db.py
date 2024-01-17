@@ -154,7 +154,6 @@ class WebUserMenu:
         return text[:4000]
 
 
-
 class Request(Base):
     __tablename__ = 'requests'
     id: Mapped[int] = mapped_column(primary_key=True,

@@ -3,6 +3,7 @@ import datetime
 
 from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
+from typing_extensions import Sequence
 
 from config_data.bot_conf import get_my_loggers
 from database.db import Session, User, Request, Link, WorkLinkRequest, WorkLink, CashOut
@@ -190,15 +191,69 @@ def get_cash_out_from_id(pk) -> CashOut:
         return cash_out
 
 
+def get_stats(queryset):
+    link_types = ['youtube', 'instagram', 'tiktok']
+    text = ''
+
+    for link_type in link_types:
+        link_count = 0
+        view_count = 0
+        cost = 0
+        text += f'{link_type}\n'
+        for link in queryset:
+            if link.link_type == link_type:
+                link_count += 1
+                view_count += link.view_count
+                cost += link.cost
+
+        text += f'Ссылок: {link_count}.'
+        text += f' Просмотров: {view_count}.'
+        text += f' Выплат: {cost}.\n'
+
+    link_count = 0
+    view_count = 0
+    cost = 0
+    for link in queryset:
+        link_count += 1
+        view_count += link.view_count
+        cost += link.cost
+    text += f'Итого Ссылок: {link_count} Просмотров: {view_count} Выплат: {cost}\n'
+    return text
+
+
+def get_links(period=None):
+    session = Session(expire_on_commit=False)
+    with session:
+        all_link_q = select(Link)
+        if period:
+            all_link_q = all_link_q.where(Link.register_date > datetime.datetime.now() - datetime.timedelta(days=period))
+        all_link: Sequence[Link] = session.execute(all_link_q).scalars().all()
+        return all_link
+
 if __name__ == '__main__':
     pass
-    client = get_user_from_id(1)
+    # client = get_user_from_id(1)
+    # # print(client)
+    # new_cash = client.cash + 100
+    # client = client.set('cash', new_cash)
     # print(client)
-    new_cash = client.cash + 100
-    client = client.set('cash', new_cash)
-    print(client)
     # r = get_request_from_id(1)
     # print(r)
     # r.set('reject_text', 'text')
     # asyncio.run(update_operation_in(['оступле333ние 1']))
 
+    all_link = get_links()
+    link_types = ['youtube', 'instagram', 'tiktok']
+    text = 'Статистика за весь период:\n'
+    text += get_stats(all_link)
+    text += '\nСтатистика за месяц:\n'
+    all_link = get_links(30)
+    text += get_stats(all_link)
+    text += '\nСтатистика за 2 недели:\n'
+    all_link = get_links(14)
+    text += get_stats(all_link)
+
+
+
+
+    print(text)
