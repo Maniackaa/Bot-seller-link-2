@@ -29,8 +29,15 @@ class IsPrivate(BaseFilter):
         return message.chat.type == 'private'
 
 
+class IsActive(BaseFilter):
+    async def __call__(self, message: Message | CallbackQuery, event_from_user) -> bool:
+        user = get_or_create_user(event_from_user)
+        return user.is_active
+
+
 router: Router = Router()
-router.message.filter(IsPrivate())
+router.message.filter(IsActive())
+router.callback_query.filter(IsActive())
 
 
 class FSMUser(StatesGroup):
@@ -338,6 +345,7 @@ async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
         trc20 = data['trc20']
         user = get_or_create_user(callback.from_user)
         user.set('cash', 0)
+        user.set('trc20', trc20)
         cash_out_id = create_cash_outs(user.id, cash, trc20)
         btn = {'Подтвердить': f'cash_out_confirm:{cash_out_id}',
                'Отклонить': f'cash_out_reject:{cash_out_id}'}

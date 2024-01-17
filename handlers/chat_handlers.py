@@ -8,11 +8,11 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 
 from config_data.bot_conf import get_my_loggers, conf
-from database.db import User
-from keyboards.keyboards import start_kb, menu_kb, admin_start_kb, custom_kb
+from database.db import User, LinkMenu, WebUserMenu
+from keyboards.keyboards import start_kb, menu_kb, admin_start_kb, custom_kb, not_auth_start_kb
 from lexicon.lexicon import LEXICON
 from services.db_func import get_or_create_user, get_user_from_id, update_user, get_request_from_id, get_link_from_id, \
-    get_work_request_from_id, create_work_link, get_cash_out_from_id, get_reg_from_id
+    get_work_request_from_id, create_work_link, get_cash_out_from_id, get_reg_from_id, create_cash_outs
 from services.func import get_unconfirmed_reg
 
 logger, err_log = get_my_loggers()
@@ -277,5 +277,222 @@ async def cash_rej_verdict(message: Message, state: FSMContext, bot: Bot):
     await bot.edit_message_text(text=msg.text + f'\nОТКЛОНЕНО {message.from_user.username}',
                                 chat_id=conf.tg_bot.GROUP_ID, message_id=msg.message_id)
 # КОНЕЦ Заявки на вывод средств **********************
+
+
+# -----------------Webuser--------------------
+
+
+class FSMWebUserMenu(StatesGroup):
+    menu = State()
+    change_view = State()
+    change_cpm = State()
+    deactivate = State()
+
+# -----Просмотр инфо по вэбмастерам-----
+@router.callback_query(F.data == 'active_web')
+async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    # await callback.message.delete()
+    logger.debug('active_web')
+    menu = WebUserMenu()
+    text = menu.text()
+    await state.set_state(FSMWebUserMenu.menu)
+    await state.update_data(page=0)
+    await callback.message.edit_text(text=text, reply_markup=menu.nav_menu())
+
+
+@router.callback_query(F.data.in_(['<<', 'back', '>>']))
+async def active_web_n(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    data = await state.get_data()
+    print('data', data)
+    page = data.get('page')
+    if callback.data == '<<':
+        page -= 1
+    elif callback.data == '>>':
+        page += 1
+    await state.update_data(page=page)
+    menu = WebUserMenu()
+    await callback.message.edit_reply_markup(reply_markup=menu.nav_menu(page=page))
+
+
+@router.callback_query(F.data.startswith('active_web_n:'))
+async def active_web_n(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    user_id = int(callback.data.split('active_web_n:')[1])
+    logger.debug('active_web')
+    menu = WebUserMenu(user_id)
+    text = menu.user_stat()
+    await state.update_data(user_id=user_id)
+    await callback.message.edit_text(text=text, reply_markup=menu.nav_menu(user_id))
+# -----Конец блока просмотр инфо по вэбмастерам-----
+
+
+# -----Просмотр роликов------
+@router.callback_query(F.data == 'videos')
+async def videos(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    await state.clear()
+    await state.set_state(FSMWebUserMenu.menu)
+    kb = {'за 7 дней': 'links_period:4', 'за 14 дней+': 'links_period:1', 'за месяц': 'links_period:2', 'За все время': 'links_period:3', 'Назад': 'cancel'}
+    await callback.message.edit_text('Выберите период', reply_markup=custom_kb(1, kb))
+
+
+@router.callback_query(F.data.startswith('links_period:'))
+async def links_period(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    print(callback.data.split(':'))
+    link_period = int(callback.data.split(':')[1])
+    user_id = 0
+    if len(callback.data.split(':')) == 3:
+        user_id = int(callback.data.split(':')[2])
+    link_menu = LinkMenu(link_period=link_period, user_id=user_id)
+    text = link_menu.text()
+    page = 0
+    kb = link_menu.nav_menu(page=page)
+    await state.update_data(link_period=link_period, user_id=user_id, page=0)
+    await callback.message.edit_text(text=text, reply_markup=kb)
+
+
+@router.callback_query(F.data.in_(['link<<', 'link_back', 'link>>']))
+async def active_web_n(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    data = await state.get_data()
+    link_period = data.get('link_period')
+    page = data.get('page')
+    if callback.data == 'link<<':
+        page -= 1
+    elif callback.data == 'link>>':
+        page += 1
+    await state.update_data(page=page)
+    menu = LinkMenu(link_period=link_period)
+    await callback.message.edit_reply_markup(reply_markup=menu.nav_menu(page=page))
+
+
+# Корректировка ссылки
+@router.callback_query(F.data.startswith('links_id:'))
+async def links_period(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    data = await state.get_data()
+    link_id = int(callback.data.split('links_id:')[1])
+    link_period = data.get('link_period')
+    link = get_link_from_id(link_id)
+    print(data)
+    link_menu = LinkMenu(n=link_id, **data)
+    text = link_menu.link_stat(link_id)
+    print(data)
+    menu = link_menu.nav_menu()
+    await callback.message.edit_text(text=text, reply_markup=menu)
+
+
+@router.callback_query(F.data.startswith('link_view_change:'))
+async def link_view_change(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    link_id = int(callback.data.split('link_view_change:')[1])
+    link = get_link_from_id(link_id)
+    if link.view_count:
+        await callback.message.delete()
+        await callback.message.answer('Просмотры уже назначены')
+        return
+    cpm = link.owner.cpm
+    await state.update_data(link_id=link_id, cpm=cpm)
+    await callback.message.answer(f'Текущий CPM: {cpm}\nВведите количество просмотров')
+    await state.set_state(FSMWebUserMenu.change_view)
+
+
+@router.message(StateFilter(FSMWebUserMenu.change_view))
+async def change_view(message: Message, state: FSMContext, bot: Bot):
+    logger.debug(change_view)
+    try:
+        view_count = int(message.text.strip())
+        data = await state.get_data()
+        cpm = data.get('cpm')
+        link_id = data.get('link_id')
+        cost = int(view_count / 1000 * cpm)
+        link = get_link_from_id(link_id)
+        link.set('view_count', view_count)
+        link.set('cost', cost)
+        user = link.owner
+        user.set('cash', user.cash + cost)
+        await message.answer(f'Просмотры для ролика {link_id} установлены. Стоимость: {cost} рублей', reply_markup=admin_start_kb)
+        await state.clear()
+
+    except ValueError:
+        await message.answer('Введите целое число')
+    except Exception as err:
+        logger.error(err)
+        await message.answer(f'error: {str(err)}')
+
+
+# Смена CPM
+@router.callback_query(F.data.startswith('change_cpm:'))
+async def change_cpm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    user_id = int(callback.data.split('change_cpm:')[1])
+    user = get_user_from_id(user_id)
+    await state.update_data(user_id=user_id)
+    await callback.message.delete()
+    await callback.message.answer(f'Укажите новый CPM для пользователя {user.username}')
+    await state.set_state(FSMWebUserMenu.change_cpm)
+
+
+@router.message(StateFilter(FSMWebUserMenu.change_cpm))
+async def change_cpm(message: Message, state: FSMContext, bot: Bot):
+    logger.debug(change_view)
+    try:
+        new_cpm = float(message.text.strip())
+        data = await state.get_data()
+        user_id = data.get('user_id')
+        user = get_user_from_id(user_id)
+        user.set('cpm', new_cpm)
+        await message.answer(f'Новый СРМ для пользователя {user.username} установлен на {new_cpm}', reply_markup=admin_start_kb)
+        await state.clear()
+
+    except ValueError:
+        await message.answer('Введите число')
+    except Exception as err:
+        logger.error(err)
+        await message.answer(f'error: {str(err)}')
+
+
+# Отключение мастера
+@router.callback_query(F.data.startswith('deactivate:'))
+async def deactivate(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    user_id = int(callback.data.split('deactivate:')[1])
+    user = get_user_from_id(user_id)
+    await state.update_data(user_id=user_id)
+    kb = {'Отключить без выплаты': 'deactivate_0', 'Отключить и рассчитать': 'deactivate_1'}
+    await callback.message.answer(f'Деактивация пользователя {user.username}.\nВыберите режим', reply_markup=custom_kb(1, kb))
+
+
+@router.callback_query(F.data.startswith('deactivate_'))
+async def deactivate_(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    mode = callback.data.split('deactivate_')[1]
+    data = await state.get_data()
+    user_id = data.get('user_id')
+    user = get_user_from_id(user_id)
+    trc20 = ''
+    if mode == '1' and user.cash > 0:
+        # Создаем запрос на вывод средств
+        cash = user.cash
+        trc20 = user.trc20
+        user.set('cash', 0)
+        cash_out_id = create_cash_outs(user.id, cash, trc20)
+        btn = {'Подтвердить': f'cash_out_confirm:{cash_out_id}',
+               'Отклонить': f'cash_out_reject:{cash_out_id}'}
+        text = f'Заявка при ДЕАКТИВАЦИИ№ {cash_out_id} на вывод {cash} р. от @{user.username or user.tg_id} на кошелек {trc20}'
+        msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
+        await bot.send_message(chat_id=user.tg_id, text=f'Вас отключили от работы, ждите последней выплаты в сумме {cash} на кошелек {trc20}')
+        await callback.message.answer(f'Пользователь {user.username} деактивирован с выплатой')
+        cash_out = get_cash_out_from_id(cash_out_id)
+        cash_out.set('msg', msg.model_dump_json())
+    else:
+        await bot.send_message(chat_id=user.tg_id,
+                               text=f'Вас отключили от работы без последующих вознаграждений', reply_markup=not_auth_start_kb)
+        await callback.message.answer(f'Пользователь {user.username} деактивирован без выплаты')
+
+    user.set('is_active', 0)
+
 
 

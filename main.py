@@ -6,7 +6,7 @@ import aioschedule
 
 from config_data.bot_conf import conf, get_my_loggers
 
-from handlers import user_handlers, echo, new_user, chat_handlers, admin_handlers, webuser_menu
+from handlers import user_handlers, echo, new_user, chat_handlers, admin_handlers
 
 logger, err_log = get_my_loggers()
 
@@ -25,12 +25,10 @@ async def main():
 
     # asyncio.create_task(jobs())
     # Регистрируем
-    dp.include_router(webuser_menu.router)
-    # dp.include_router(admin_handlers.router)
-    dp.include_router(new_user.router)
-
     dp.include_router(chat_handlers.router)
+    dp.include_router(admin_handlers.router)
 
+    dp.include_router(new_user.router)
     dp.include_router(user_handlers.router)
     dp.include_router(echo.router)
 

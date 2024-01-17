@@ -129,6 +129,7 @@ class WebUserMenu:
 
         nav_btn = {}
         nav_btn.update({'Изменить CPM': f'change_cpm:{self.user_id}',
+                        'Деактивировать пользователя': f'deactivate:{self.user_id}',
                         'за 7 дней': 'links_period:4',
                         'за 14 дней+': f'links_period:1:{user_id}',
                         'за месяц': f'links_period:2:{user_id}',
