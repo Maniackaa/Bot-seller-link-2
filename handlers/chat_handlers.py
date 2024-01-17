@@ -276,6 +276,6 @@ async def cash_rej_verdict(message: Message, state: FSMContext, bot: Bot):
     # Меняем сообщение в группе
     await bot.edit_message_text(text=msg.text + f'\nОТКЛОНЕНО {message.from_user.username}',
                                 chat_id=conf.tg_bot.GROUP_ID, message_id=msg.message_id)
-
+# КОНЕЦ Заявки на вывод средств **********************
 
 

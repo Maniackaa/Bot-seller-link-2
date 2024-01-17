@@ -126,11 +126,14 @@ class WebUserMenu:
             else:
                 menus = ''
             return self.custom_kb(1, nav_btn, menus=menus)
-        nav_btn = {
-            'Назад': 'back',
 
-        }
-        nav_btn.update({'за 7 дней': 'links_period:4', 'за 14 дней+': f'links_period:1:{user_id}', 'за месяц': f'links_period:2:{user_id}', 'За все время': f'links_period:3:{user_id}'})
+        nav_btn = {}
+        nav_btn.update({'Изменить CPM': f'change_cpm:{self.user_id}',
+                        'за 7 дней': 'links_period:4',
+                        'за 14 дней+': f'links_period:1:{user_id}',
+                        'за месяц': f'links_period:2:{user_id}',
+                        'За все время': f'links_period:3:{user_id}'})
+        nav_btn.update({'Назад': 'back'})
         return self.custom_kb(1, nav_btn, menus='')
 
     def user_stat(self):

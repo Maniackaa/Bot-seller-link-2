@@ -15,7 +15,7 @@ from handlers.new_user import FSMCheckUser, FSMAnket
 from keyboards.keyboards import start_kb, contact_kb, admin_start_kb, custom_kb, menu_kb, kb_list
 from lexicon.lexicon import LEXICON
 from services.db_func import get_or_create_user, update_user, create_links, get_link_from_id, create_work_link_request, \
-    get_work_request_from_id, create_cash_outs, get_cash_out_from_id, create_link
+    get_work_request_from_id, create_cash_outs, get_cash_out_from_id, create_link, get_user_from_id
 from services.func import get_all_time_cash, get_all_worked_link
 
 logger, err_log = get_my_loggers()
@@ -36,7 +36,7 @@ router.message.filter()
 class FSMWebUserMenu(StatesGroup):
     menu = State()
     change_view = State()
-
+    change_cpm = State()
 
 # -----Просмотр инфо по вэбмастерам-----
 @router.callback_query(F.data == 'active_web')
@@ -168,6 +168,37 @@ async def change_view(message: Message, state: FSMContext, bot: Bot):
 
     except ValueError:
         await message.answer('Введите целое число')
+    except Exception as err:
+        logger.error(err)
+        await message.answer(f'error: {str(err)}')
+
+
+# Смена CPM
+@router.callback_query(F.data.startswith('change_cpm:'))
+async def change_cpm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    logger.debug(callback.data)
+    user_id = int(callback.data.split('change_cpm:')[1])
+    user = get_user_from_id(user_id)
+    await state.update_data(user_id=user_id)
+    await callback.message.delete()
+    await callback.message.answer(f'Укажите новый CPM для пользователя {user.username}')
+    await state.set_state(FSMWebUserMenu.change_cpm)
+
+
+@router.message(StateFilter(FSMWebUserMenu.change_cpm))
+async def change_cpm(message: Message, state: FSMContext, bot: Bot):
+    logger.debug(change_view)
+    try:
+        new_cpm = float(message.text.strip())
+        data = await state.get_data()
+        user_id = data.get('user_id')
+        user = get_user_from_id(user_id)
+        user.set('cpm', new_cpm)
+        await message.answer(f'Новый СРМ для пользователя {user.username} установлен на {new_cpm}', reply_markup=admin_start_kb)
+        await state.clear()
+
+    except ValueError:
+        await message.answer('Введите число')
     except Exception as err:
         logger.error(err)
         await message.answer(f'error: {str(err)}')
