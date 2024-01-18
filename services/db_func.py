@@ -250,7 +250,7 @@ def save_stat_to_df():
             user_links: list[Link] = session.execute(q).scalars().all()
             print(user_links)
             user = get_user_from_id(user_id)
-            columns = ['id', 'Дата', 'Cссылка', 'Источник', 'Просмотры', 'Выплата']
+            columns = ['id', 'Дата', 'Cссылка', 'Источник', 'Просмотры', 'Выплата', 'username']
             rows = []
             for link in user_links:
                 row = [link.id,
@@ -258,7 +258,8 @@ def save_stat_to_df():
                        link.link,
                        link.link_type,
                        link.view_count,
-                       link.cost]
+                       link.cost,
+                       link.owner.username]
                 rows.append(row)
             df_to_save = pd.DataFrame(data=rows, index=None, columns=columns)
             with pd.ExcelWriter(path, engine="openpyxl", mode="a") as writer:
