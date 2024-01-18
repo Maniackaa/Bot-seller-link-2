@@ -208,7 +208,7 @@ class Link(Base):
 
 
 class LinkMenu:
-    PAGINATE = 2
+    PAGINATE = 10
 
     def __init__(self, n=None, user_id=0, link_period=3, **kwargs):
         self.n = n
