@@ -48,10 +48,10 @@ class FSMCash(StatesGroup):
     cost = State()
 
 
-# @router.callback_query(F.data == 'support')
-# async def support(callback: CallbackQuery, state: FSMContext, bot: Bot):
-#     text = LEXICON.get('support')
-#     await callback.message.edit_text(text, reply_markup=start_kb)
+@router.callback_query(F.data == 'support')
+async def support(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    text = LEXICON.get('support')
+    await callback.message.edit_text(text, reply_markup=start_kb)
 
 # @router.message(F.text == kb_list[4])
 # async def support(message: Message, state: FSMContext):
@@ -294,6 +294,13 @@ async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: 
     work_request.set('msg', msg.model_dump_json())
     await callback.message.answer('Ваша заявка отправлена')
     await callback.message.delete()
+
+
+@router.callback_query(F.data == 'balance')
+async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    user = get_or_create_user(callback.from_user)
+    kb = {'Заявка на вывод средств': 'cash_out', 'Назад': 'cancel' }
+    await callback.message.edit_text(f'Ваш баланс: {user.cash} руб.', reply_markup=custom_kb(1, kb))
 
 
 # Запрос на вывод средств

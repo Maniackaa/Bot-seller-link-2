@@ -6,7 +6,7 @@ LEXICON_COMMANDS_RU: dict[str, str] = {
 
 LEXICON: dict[str, str] = {
     '/start': "Добрый день",
-    'support': "Для связи с поддержкой напишете @суппорт",
+    'support': "Для связи с поддержкой напишете https://t.me/Viltaly_RoyalPartners",
     'instructions': f'Ссылка 1\nСсылка 2'
 }
 

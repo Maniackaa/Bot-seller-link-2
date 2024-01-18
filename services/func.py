@@ -40,6 +40,18 @@ def get_users_with_uncofirmed_link(limit=10) -> Sequence[User]:
         return users
 
 
+def get_users_with_uncofirmed_link(limit=100) -> Sequence[User]:
+    """
+    Возвращает пользователей у которых есть ссылки по еоторым нет выплат cost
+    :return:
+    """
+    session = Session()
+    with session:
+        q = select(User).where(User.links.any(cost=0)).order_by(User.id).limit(limit)
+        users = session.execute(q).scalars().all()
+        return users
+
+
 def get_user_uncofirmed_link(user_id: int) -> Sequence[User]:
     """
     Возвращает ссылки юзера со статусом 'moderate'

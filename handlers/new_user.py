@@ -97,9 +97,9 @@ async def operation_in(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.debug('new user cancel')
     await callback.message.delete()
     await state.clear()
-    await callback.message.answer('Введите /start для начала работы', reply_markup=not_auth_start_kb)
+    await callback.message.answer('Введите /start или Меню для начала работы', reply_markup=not_auth_start_kb)
 
-
+@router.message(F.text == 'Меню')
 @router.message(Command(commands=["start"]))
 async def process_start_command(message: Message, state: FSMContext):
     logger.debug('new')
@@ -210,9 +210,11 @@ async def questions_text(message: Message, state: FSMContext, bot: Bot):
 
 def format_request(user, answers):
 
-    msg = f'Новая заявка от @{user.username or user.tg_id}):\n'
-    for answer in answers:
-        msg += f'{answer}\n\n'
+    msg = f'Новая заявка на подключение канала @{user.username or user.tg_id}):\n'
+    msg += f'Источник: {answers[1]}\n'
+    msg += f'Просмотры: {answers[2]}\n'
+    # for answer in answers:
+    #     msg += f'{answer}\n'
     return msg
 
 
@@ -224,8 +226,9 @@ async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
 
         user = get_or_create_user(callback.from_user)
 
-        text = format_request(user, FSMAnket.answers.values())
-        request_id = create_request(user, text)
+        text = format_request(user, FSMAnket.answers)
+        source = FSMAnket.answers[1]
+        request_id = create_request(user, text, source)
         btn = {'Принять': f'confirm_user_{request_id}', 'Отклонить': f'reject_user_{request_id}'}
         request_msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
         request = get_request_from_id(request_id)

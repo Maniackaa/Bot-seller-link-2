@@ -17,7 +17,9 @@ def custom_kb(width: int, buttons_dict: dict) -> InlineKeyboardMarkup:
 
 start_kb_b = {
     '💰Отправить ссылку': 'send_link',
-    'Заявка на вывод средств': 'cash_out',
+    # 'Заявка на вывод средств': 'cash_out',
+    'Баланс': 'balance',
+    'Саппорт': 'support'
     # '💼 Аккаунт': 'my_account',
     # '🛠 Инструкция по работе': 'instructions',
     # '🔗 Получить ссылку': 'give_link',
@@ -60,7 +62,7 @@ contact_kb: ReplyKeyboardMarkup = ReplyKeyboardMarkup(
 
 
 kb = [
-    [KeyboardButton(text="/start")],
+    [KeyboardButton(text="Меню")],
     ]
 not_auth_start_kb: ReplyKeyboardMarkup = ReplyKeyboardMarkup(
     keyboard=kb,

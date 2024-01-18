@@ -76,13 +76,14 @@ def update_user(user: User, data: dict):
         err_log.error(f'Ошибка обновления юзера {user}: {err}')
 
 
-def create_request(user: User, text):
+def create_request(user: User, text, source):
     logger.debug(f'Сохраняем запрос')
     session = Session()
     with session:
         request = Request(
             user_id=user.id,
-            text=text
+            text=text,
+            source=source
         )
         session.add(request)
         session.commit()

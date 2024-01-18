@@ -52,6 +52,7 @@ class User(Base):
     work_link: Mapped[int] = mapped_column(ForeignKey('work_links.id', ondelete='CASCADE'), nullable=True)
     work_link_requests: Mapped[list['WorkLinkRequest']] = relationship(back_populates='owner', lazy='subquery')
     cash_outs: Mapped[list['CashOut']] = relationship(back_populates='user', lazy='subquery')
+    source: Mapped[str] = mapped_column(String(50), nullable=True)
 
     def __str__(self):
         return f'{self.id}. {self.username or "-"} ({self.fio}). Баланс {self.cash}'
@@ -67,7 +68,7 @@ class WebUserMenu:
         self.user_id = user_id
 
     @property
-    def user(self):
+    def user(self) -> User:
         session = Session()
         with session:
             user = select(User).where(User.id == self.user_id)
@@ -125,32 +126,46 @@ class WebUserMenu:
                 menus = f'{start + 1} - {min(end, len(queryset))} из {len(queryset)}'
             else:
                 menus = ''
+            nav_btn.update({'Назад': 'cancel'})
             return self.custom_kb(1, nav_btn, menus=menus)
 
         nav_btn = {}
         nav_btn.update({'Изменить CPM': f'change_cpm:{self.user_id}',
                         'Деактивировать пользователя': f'deactivate:{self.user_id}',
-                        'за 7 дней': 'links_period:4',
-                        'за 14 дней+': f'links_period:1:{user_id}',
-                        'за месяц': f'links_period:2:{user_id}',
-                        'За все время': f'links_period:3:{user_id}'})
+                        # 'Ролики за 7 дней': 'links_period:4',
+                        # 'Ролики за 14 дней+': f'links_period:1:{user_id}',
+                        # 'Ролики за месяц': f'links_period:2:{user_id}',
+                        # 'Ролики за все время': f'links_period:3:{user_id}'
+                       })
         nav_btn.update({'Назад': 'back'})
         return self.custom_kb(1, nav_btn, menus='')
+
+    # def user_stat(self):
+    #     if not self.user_id:
+    #         return 'Выберети пользователя'
+    #     text = f'Статистика пользователя {self.user.username} (CPM: {self.user.cpm})\n'
+    #     link_types = ['youtube', 'instagram', 'tiktok']
+    #     links: Sequence[Link] = self.user.links
+    #     for link_type in link_types:
+    #         text += f'{link_type}:\n'
+    #         for link in links:
+    #             if link.link_type == link_type:
+    #                 data = [link.link, str(link.register_date.strftime('%d.%m.%Y')), str(link.view_count), str(link.cost)]
+    #                 print(data)
+    #                 text += ' - '.join(data)
+    #                 text += '\n'
+    #     return text[:4000]
 
     def user_stat(self):
         if not self.user_id:
             return 'Выберети пользователя'
-        text = f'Статистика пользователя {self.user.username} (CPM: {self.user.cpm})\n'
-        link_types = ['youtube', 'instagram', 'tiktok']
-        links: Sequence[Link] = self.user.links
-        for link_type in link_types:
-            text += f'{link_type}:\n'
-            for link in links:
-                if link.link_type == link_type:
-                    data = [link.link, str(link.register_date.strftime('%d.%m.%Y')), str(link.view_count), str(link.cost)]
-                    print(data)
-                    text += ' - '.join(data)
-                    text += '\n'
+        sum_view = 0
+        sum_cost = 0
+        for link in self.user.links:
+            sum_view += link.view_count
+            sum_cost += link.cost
+
+        text = f'{self.user.username}\nИсточник: {self.user.source}\ncpm: {self.user.cpm}\nКоличество роликов: {len(self.user.links)}\nКоличество просмотров: {sum_view}\nВыплаты: {sum_cost} руб.'
         return text[:4000]
 
 
@@ -166,6 +181,7 @@ class Request(Base):
     status: Mapped[int] = mapped_column(Integer(), default=0)
     reject_text: Mapped[str] = mapped_column(String(4000), nullable=True)
     msg: Mapped[json] = mapped_column(JSONB(), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=True)
 
 
 class Link(Base):
@@ -251,6 +267,8 @@ class LinkMenu:
             text += f'за месяц\n'
         if self.link_period == 3:
             text += f'за все время\n'
+        if self.link_period == 4:
+            text += f'за 7 дней\n'
         print(f'start_period: {self.start_period}')
         links = self.get_queryset(start_date=self.start_period)
         print('links', links)
@@ -304,7 +322,7 @@ class LinkMenu:
                 if len(queryset) > self.PAGINATE:
                     menus = f'{start + 1} - {min(end, len(queryset))} из {len(queryset)}'
             if self.user_id:
-                nav_btn.update({'Назад': f'active_web_n:{self.user_id}'})
+                nav_btn.update({'Назад': f'show_user_links:{self.user_id}'})
             else:
                 nav_btn.update({'Назад': f'videos'})
             return self.custom_kb(1, nav_btn, menus=menus)
