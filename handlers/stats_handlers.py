@@ -7,7 +7,7 @@ import pandas as pd
 from config_data.bot_conf import get_my_loggers, BASE_DIR
 from database.db import Session, Link
 from keyboards.keyboards import admin_start_kb
-from services.db_func import get_links, get_stats
+from services.db_func import get_links, get_stats, save_stat_to_df
 
 router = Router()
 
@@ -32,7 +32,7 @@ async def stats(callback: CallbackQuery, state: FSMContext, bot: Bot):
 @router.callback_query(F.data == 'export')
 async def stats(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.debug('export')
-
+    save_stat_to_df()
     file = FSInputFile(BASE_DIR / 'text.xlsx')
     await bot.send_document(chat_id=callback.message.chat.id, document=file)
 
