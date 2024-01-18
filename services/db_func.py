@@ -1,11 +1,12 @@
 import asyncio
 import datetime
 
-from sqlalchemy import select, delete
+import pandas as pd
+from sqlalchemy import select, delete, distinct, Row, RowMapping
 from sqlalchemy.exc import IntegrityError
 from typing_extensions import Sequence
 
-from config_data.bot_conf import get_my_loggers
+from config_data.bot_conf import get_my_loggers, BASE_DIR
 from database.db import Session, User, Request, Link, WorkLinkRequest, WorkLink, CashOut
 
 logger, err_log = get_my_loggers()
@@ -221,7 +222,7 @@ def get_stats(queryset):
     return text
 
 
-def get_links(period=None):
+def get_links(period=None) -> Sequence[Link]:
     session = Session(expire_on_commit=False)
     with session:
         all_link_q = select(Link)
@@ -229,6 +230,39 @@ def get_links(period=None):
             all_link_q = all_link_q.where(Link.register_date > datetime.datetime.now() - datetime.timedelta(days=period))
         all_link: Sequence[Link] = session.execute(all_link_q).scalars().all()
         return all_link
+
+
+def save_stat_to_df():
+    """
+    Сохраняет статистике в файл excel
+    """
+    path = BASE_DIR / 'text.xlsx'
+    session = Session(expire_on_commit=False)
+    with session:
+        all_users = select(distinct(Link.owner_id))
+        all_users: Sequence[Link] = session.execute(all_users).scalars().all()
+        with pd.ExcelWriter(path, engine="openpyxl", mode="w") as writer:
+            pd.DataFrame().to_excel(writer, sheet_name='Info', startrow=0, startcol=0)
+
+        for user_id in all_users:
+            q = select(Link).where(Link.owner_id == user_id).order_by(Link.link_type.asc(), Link.register_date.asc())
+            user_links: list[Link] = session.execute(q).scalars().all()
+            print(user_links)
+            user = get_user_from_id(user_id)
+            columns = ['id', 'Дата', 'Cссылка', 'Источник', 'Просмотры', 'Выплата']
+            rows = []
+            for link in user_links:
+                row = [link.id,
+                       link.register_date.strftime('%d.%m.%Y'),
+                       link.link,
+                       link.link_type,
+                       link.view_count,
+                       link.cost]
+                rows.append(row)
+            df_to_save = pd.DataFrame(data=rows, index=None, columns=columns)
+            with pd.ExcelWriter(path, engine="openpyxl", mode="a") as writer:
+                df_to_save.to_excel(writer, sheet_name=str(f'{user.username} ({user.cpm})'), index=False, startrow=0, startcol=0)
+
 
 if __name__ == '__main__':
     pass
@@ -241,19 +275,8 @@ if __name__ == '__main__':
     # print(r)
     # r.set('reject_text', 'text')
     # asyncio.run(update_operation_in(['оступле333ние 1']))
-
-    all_link = get_links()
-    link_types = ['youtube', 'instagram', 'tiktok']
-    text = 'Статистика за весь период:\n'
-    text += get_stats(all_link)
-    text += '\nСтатистика за месяц:\n'
-    all_link = get_links(30)
-    text += get_stats(all_link)
-    text += '\nСтатистика за 2 недели:\n'
-    all_link = get_links(14)
-    text += get_stats(all_link)
+    save_stat_to_df()
 
 
 
 
-    print(text)
