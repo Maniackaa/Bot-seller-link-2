@@ -196,6 +196,7 @@ class FSMConfirmRequest(StatesGroup):
 
 @router.callback_query(F.data.startswith('confirm_user_'))
 async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
     logger.debug(callback.data)
     request_id = int(callback.data.split('confirm_user_')[-1])
     await callback.message.answer('Укажите CPM')
@@ -269,6 +270,7 @@ class FSMCashOut(StatesGroup):
 
 @router.callback_query(F.data.startswith('cash_out_confirm:'))
 async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
     cash_out_id = int(callback.data.split('cash_out_confirm:')[-1])
     cash_out = get_cash_out_from_id(cash_out_id)
     cash_out.set('status', 1)
@@ -290,6 +292,7 @@ async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
 
 @router.callback_query(F.data.startswith('cash_out_reject:'))
 async def cash_conf(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
     cash_out_id = int(callback.data.split('cash_out_reject:')[-1])
     await callback.message.answer(f'Укажите причину отмены заявки № {cash_out_id}')
     await state.set_state(FSMCashOut.reject)
@@ -523,6 +526,7 @@ async def change_cpm(message: Message, state: FSMContext, bot: Bot):
 # Отключение мастера
 @router.callback_query(F.data.startswith('deactivate:'))
 async def deactivate(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
     logger.debug(callback.data)
     user_id = int(callback.data.split('deactivate:')[1])
     user = get_user_from_id(user_id)
