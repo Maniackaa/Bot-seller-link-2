@@ -1,7 +1,7 @@
 version: '3'
 
 volumes:
-  pg_data:
+  pg_data2:
   pgadmin_data:
   redis_data:
 
@@ -13,8 +13,8 @@ services:
     volumes:
       - ./postgres/init_db:/docker-entrypoint-initdb.d
 #      - ./postgres/postgres-data.conf/:/var/lib/postgresql/data
-#      - pg_data:/var/lib/postgresql/data
-      - ./postgres/postgres-data/:/var/lib/postgresql/data
+      - pg_data2:/var/lib/postgresql/data
+#      - ./postgres/postgres-data/:/var/lib/postgresql/data
     ports:
       - "35432:5432"
     restart: always
