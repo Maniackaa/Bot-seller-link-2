@@ -82,10 +82,10 @@ async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
     kb = {}
     text = 'Список ваших каналов:\n'
     for req in active_requests:
-        text += f'{req.id}. {req.channel_name}\n\n'
+        text += f'{req.id}. {req.channel_name} ({req.cpm})\n\n'
         kb[f'{req.id}. {req.channel_name[:30]}'] = f'send_link:{req.id}'
 
-    await callback.message.edit_text('Выберите канал', reply_markup=custom_kb(1, kb))
+    await callback.message.edit_text(text, reply_markup=custom_kb(1, kb))
     await state.set_state(FSMUser.send_link)
 
 
@@ -303,17 +303,17 @@ async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: 
 #     await message.answer(f'Отправить заявку?', reply_markup=custom_kb(2, btn))
 
 
-@router.callback_query(F.data == 'work_link_confirm')
-async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    user = get_or_create_user(callback.from_user)
-    work_id = create_work_link_request(user)
-    btn = {'Подтвердить': f'confirm_req_work:{work_id}', 'Отклонить': f'reject_req_work:{work_id}'}
-    text = f'Заявка на рабочую ссылку № {work_id} от @{callback.message.from_user.username or callback.message.from_user.id}'
-    msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
-    work_request = get_work_request_from_id(work_id)
-    work_request.set('msg', msg.model_dump_json())
-    await callback.message.answer('Ваша заявка отправлена')
-    await callback.message.delete()
+# @router.callback_query(F.data == 'work_link_confirm')
+# async def sell_account_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+#     user = get_or_create_user(callback.from_user)
+#     work_id = create_work_link_request(user)
+#     btn = {'Подтвердить': f'confirm_req_work:{work_id}', 'Отклонить': f'reject_req_work:{work_id}'}
+#     text = f'Заявка на рабочую ссылку № {work_id} от @{callback.message.from_user.username or callback.message.from_user.id}'
+#     msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
+#     work_request = get_work_request_from_id(work_id)
+#     work_request.set('msg', msg.model_dump_json())
+#     await callback.message.answer('Ваша заявка отправлена')
+#     await callback.message.delete()
 
 
 @router.callback_query(F.data == 'balance')

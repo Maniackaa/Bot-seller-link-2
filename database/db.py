@@ -130,8 +130,9 @@ class WebUserMenu:
             return self.custom_kb(1, nav_btn, menus=menus)
 
         nav_btn = {}
-        nav_btn.update({'Изменить CPM': f'change_cpm:{self.user_id}',
-                        'Деактивировать пользователя': f'deactivate:{self.user_id}',
+        nav_btn.update({'Изменить CPM': f'cpm_select:{self.user_id}',
+                        'Деактивировать канал': f'deactivate:{self.user_id}',
+                        'Деактивировать вэбмастера': f'deactivateuser:{self.user_id}',
                         # 'Ролики за 7 дней': 'links_period:4',
                         # 'Ролики за 14 дней+': f'links_period:1:{user_id}',
                         # 'Ролики за месяц': f'links_period:2:{user_id}',
@@ -158,14 +159,17 @@ class WebUserMenu:
 
     def user_stat(self):
         if not self.user_id:
-            return 'Выберети пользователя'
+            return 'Выберите пользователя'
         sum_view = 0
         sum_cost = 0
         for link in self.user.links:
             sum_view += link.view_count
             sum_cost += link.cost
-
-        text = f'{self.user.username}\nИсточник: {self.user.source}\ncpm: {self.user.cpm}\nКоличество роликов: {len(self.user.links)}\nКоличество просмотров: {sum_view}\nВыплаты: {sum_cost} руб.'
+        channels_info = f'Каналы:\n'
+        for channel in self.user.requests:
+            if channel.status == 1:
+                channels_info += f'{channel.id}. {channel.channel_name}. cpm {channel.cpm}\n'
+        text = f'{self.user.username}\n{channels_info}\nКоличество роликов: {len(self.user.links)}\nКоличество просмотров: {sum_view}\nВыплаты: {sum_cost} руб.'
         return text[:4000]
 
 
@@ -289,7 +293,7 @@ class LinkMenu:
             text += f'\n<b>{link_type}:</b>\n'
             for link in links:
                 if link.link_type == link_type:
-                    data = [f'<a href="{link.link}">{link.id}. {link_type}</a>', str(link.register_date.strftime('%d.%m.%Y')), str(link.view_count), str(link.cost)]
+                    data = [f'<a href="{link.link}">{link.id}. {link_type}</a>', str(link.register_date.strftime('%d.%m.%Y')), str(link.view_count), str(link.cost), f'cpm {link.request.cpm}']
                     text += ' - '.join(data)
                     text += '\n'
         text += '\n\nВыберите ролик'
