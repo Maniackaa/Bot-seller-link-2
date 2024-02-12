@@ -114,7 +114,10 @@ class WebUserMenu:
             max_page = len(queryset) // self.PAGINATE
             if len(queryset) % self.PAGINATE != 0:
                 max_page += 1
-            page = page % max_page
+            if max_page == 0:
+                page = 0
+            else:
+                page = page % max_page
             start = self.PAGINATE * page
             end = start + self.PAGINATE
             logger.debug(f'page: {page}. {start} - {end}')
