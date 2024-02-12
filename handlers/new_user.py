@@ -75,7 +75,7 @@ class FSMAnket(StatesGroup):
             False
         ),
         (
-            'Укажите ваш канал. Если хотите подать несколько каналов, подавайте их списком',
+            'Укажите ваш канал. На каждый канал подается отдельная заявка',
             '',
             False
         ),
@@ -98,6 +98,7 @@ async def operation_in(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.message.delete()
     await state.clear()
     await callback.message.answer('Введите /start или Меню для начала работы', reply_markup=not_auth_start_kb)
+
 
 @router.message(F.text == 'Меню')
 @router.message(Command(commands=["start"]))
@@ -128,7 +129,16 @@ def format_confirm_text(answers: dict) -> str:
         text += f'<b>{question}:</b>\n{answer}\n\n'
     return text
 
+
 # Анкетирование
+@router.callback_query(F.data.startswith('new_answer'))
+async def answer_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
+    await state.set_state(FSMAnket.anket)
+    await callback.message.answer('Какой тип контента вы создаете (SHORTS, полноформатные видео)?',
+                                  reply_markup=get_question_kb_button(0))
+
+
 @router.callback_query(F.data.startswith('answer'))
 async def answer_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
     print(callback.data)
@@ -213,6 +223,7 @@ def format_request(user, answers):
     msg = f'Новая заявка на подключение канала @{user.username or user.tg_id}):\n'
     msg += f'Источник: {answers[1]}\n'
     msg += f'Просмотры: {answers[2]}\n'
+    msg += f'Канал: {answers[3]}\n'
     # for answer in answers:
     #     msg += f'{answer}\n'
     return msg
@@ -222,17 +233,18 @@ def format_request(user, answers):
 async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
     try:
         await callback.message.delete_reply_markup()
-        await callback.message.answer('Ваша завка отправлена. Ожидайте ответа.')
 
         user = get_or_create_user(callback.from_user)
 
         text = format_request(user, FSMAnket.answers)
         source = FSMAnket.answers[1]
-        request_id = create_request(user, text, source)
+        channel_name = FSMAnket.answers[3]
+        request_id = create_request(user, text, source, channel_name)
         btn = {'Принять': f'confirm_user_{request_id}', 'Отклонить': f'reject_user_{request_id}'}
         request_msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
         request = get_request_from_id(request_id)
         request.set('msg', request_msg.model_dump_json())
+        await callback.message.answer(f'Ваша завка на новый канал № {request.id} отправлена. Ожидайте ответа.')
         await state.clear()
 
         end_answer = """Спасибо. 

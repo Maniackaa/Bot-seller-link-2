@@ -2,7 +2,7 @@ from typing import Sequence
 
 from sqlalchemy import select, func
 
-from database.db import User, Session, Link, Request, WorkLinkRequest, WorkLink
+from database.db import User, Session, Link, Request
 from services.db_func import get_user_from_id
 
 
@@ -15,13 +15,13 @@ def get_all_time_cash(owner: User):
         return cash or 0
 
 
-def get_all_worked_link(owner: User) -> Sequence[WorkLink]:
-    """Подсчет ссылок"""
-    session = Session()
-    with session:
-        q = select(WorkLink).where(WorkLink.worker_id == owner.id)
-        links = session.execute(q).scalars().all()
-        return links
+# def get_all_worked_link(owner: User) -> Sequence[WorkLink]:
+#     """Подсчет ссылок"""
+#     session = Session()
+#     with session:
+#         q = select(WorkLink).where(WorkLink.worker_id == owner.id)
+#         links = session.execute(q).scalars().all()
+#         return links
 
 # user = get_user_from_id(1)
 # print(user)
@@ -72,9 +72,9 @@ def get_unconfirmed_reg(limit=5) -> Sequence[Request]:
         return regs
 
 
-def get_unconfirmed_work_req(limit=5) -> Sequence[WorkLinkRequest]:
-    session = Session()
-    with session:
-        q = select(WorkLinkRequest).where(WorkLinkRequest.status == 0).limit(limit)
-        regs = session.execute(q).scalars().all()
-        return regs
+# def get_unconfirmed_work_req(limit=5) -> Sequence[WorkLinkRequest]:
+#     session = Session()
+#     with session:
+#         q = select(WorkLinkRequest).where(WorkLinkRequest.status == 0).limit(limit)
+#         regs = session.execute(q).scalars().all()
+#         return regs

@@ -44,18 +44,18 @@ class User(Base):
     register_date: Mapped[datetime.datetime] = mapped_column(DateTime(), nullable=True)
     fio: Mapped[str] = mapped_column(String(200), nullable=True)
     cash: Mapped[int] = mapped_column(Integer(), default=0)
-    cpm: Mapped[float] = mapped_column(Float(precision=1), default=0)
+    # cpm: Mapped[float] = mapped_column(Float(precision=1), default=0)
     is_active: Mapped[int] = mapped_column(Integer(), default=0)
     trc20: Mapped[str] = mapped_column(String(50), nullable=True)
     links: Mapped[list['Link']] = relationship(back_populates='owner', lazy='subquery')
     requests: Mapped[list['Request']] = relationship(back_populates='owner', lazy='subquery')
-    work_link: Mapped[int] = mapped_column(ForeignKey('work_links.id', ondelete='CASCADE'), nullable=True)
-    work_link_requests: Mapped[list['WorkLinkRequest']] = relationship(back_populates='owner', lazy='subquery')
+    # work_link: Mapped[int] = mapped_column(ForeignKey('work_links.id', ondelete='CASCADE'), nullable=True)
+    # work_link_requests: Mapped[list['WorkLinkRequest']] = relationship(back_populates='owner', lazy='subquery')
     cash_outs: Mapped[list['CashOut']] = relationship(back_populates='user', lazy='subquery')
-    source: Mapped[str] = mapped_column(String(50), nullable=True)
+    # source: Mapped[str] = mapped_column(String(50), nullable=True)
 
     def __str__(self):
-        return f'{self.id}. {self.username or "-"} ({self.fio}). Баланс {self.cash}'
+        return f'{self.id}. @{self.username or "-"} ({self.fio or self.tg_id}). Баланс {self.cash}'
 
     def __repr__(self):
         return f'{self.id}. {self.username or "-"} ({self.fio})'
@@ -170,6 +170,7 @@ class WebUserMenu:
 
 
 class Request(Base):
+    # Запрос на модерацию нового канала
     __tablename__ = 'requests'
     id: Mapped[int] = mapped_column(primary_key=True,
                                     autoincrement='auto')
@@ -181,7 +182,16 @@ class Request(Base):
     status: Mapped[int] = mapped_column(Integer(), default=0)
     reject_text: Mapped[str] = mapped_column(String(4000), nullable=True)
     msg: Mapped[json] = mapped_column(JSONB(), nullable=True)
-    source: Mapped[str] = mapped_column(String(50), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=True, comment='Источник (Ютюб и т.д.')
+    channel_name: Mapped[str] = mapped_column(String(500), nullable=True, comment='Имя канала')
+    cpm: Mapped[float] = mapped_column(Float(precision=1), default=0)
+    links: Mapped[list['Link']] = relationship(back_populates='request', lazy='subquery')
+
+    def __str__(self):
+        return f'Request {self.id}. {self.channel_name}'
+
+    def __repr__(self):
+        return f'Request {self.id}. {self.channel_name}'
 
 
 class Link(Base):
@@ -199,6 +209,8 @@ class Link(Base):
     view_count: Mapped[int] = mapped_column(Integer(), default=0)
     cost: Mapped[int] = mapped_column(Integer(), default=0)
     msg: Mapped[json] = mapped_column(JSONB(), nullable=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey('requests.id', ondelete='CASCADE'))
+    request: Mapped['Request'] = relationship(back_populates='links', lazy='subquery')
 
     def __str__(self):
         return f'{self.id}. {self.link}'
@@ -354,41 +366,41 @@ class LinkMenu:
         return text
 
 
-class WorkLink(Base):
-    __tablename__ = 'work_links'
-    id: Mapped[int] = mapped_column(primary_key=True,
-                                    autoincrement='auto')
-    register_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True,
-                                                    default=lambda: datetime.datetime.now(tz=tz))
-    link: Mapped[str] = mapped_column(String(1000))
-    worker_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
-    moderator_id: Mapped[int] = mapped_column(Integer(), nullable=True)
-
-    def __str__(self):
-        return f'{self.id}. {self.link}'
-
-    def __repr__(self):
-        return f'{self.id}. {self.link}'
-
-
-class WorkLinkRequest(Base):
-    __tablename__ = 'work_link_requests'
-    id: Mapped[int] = mapped_column(primary_key=True,
-                                    autoincrement='auto')
-    owner_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
-    owner: Mapped['User'] = relationship(back_populates='work_link_requests', lazy='subquery')
-    register_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True,
-                                                    default=lambda: datetime.datetime.now(tz=tz))
-
-    status: Mapped[int] = mapped_column(Integer(), default=0)
-    reject_text: Mapped[str] = mapped_column(String(4000), nullable=True)
-    msg: Mapped[json] = mapped_column(JSONB(), nullable=True)
-
-    def __str__(self):
-        return f'{self.id}. {self.owner_id}'
-
-    def __repr__(self):
-        return f'{self.id}. {self.owner_id}'
+# class WorkLink(Base):
+#     __tablename__ = 'work_links'
+#     id: Mapped[int] = mapped_column(primary_key=True,
+#                                     autoincrement='auto')
+#     register_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True,
+#                                                     default=lambda: datetime.datetime.now(tz=tz))
+#     link: Mapped[str] = mapped_column(String(1000))
+#     worker_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+#     moderator_id: Mapped[int] = mapped_column(Integer(), nullable=True)
+#
+#     def __str__(self):
+#         return f'{self.id}. {self.link}'
+#
+#     def __repr__(self):
+#         return f'{self.id}. {self.link}'
+#
+#
+# class WorkLinkRequest(Base):
+#     __tablename__ = 'work_link_requests'
+#     id: Mapped[int] = mapped_column(primary_key=True,
+#                                     autoincrement='auto')
+#     owner_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+#     owner: Mapped['User'] = relationship(back_populates='work_link_requests', lazy='subquery')
+#     register_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True,
+#                                                     default=lambda: datetime.datetime.now(tz=tz))
+#
+#     status: Mapped[int] = mapped_column(Integer(), default=0)
+#     reject_text: Mapped[str] = mapped_column(String(4000), nullable=True)
+#     msg: Mapped[json] = mapped_column(JSONB(), nullable=True)
+#
+#     def __str__(self):
+#         return f'{self.id}. {self.owner_id}'
+#
+#     def __repr__(self):
+#         return f'{self.id}. {self.owner_id}'
 
 
 class CashOut(Base):

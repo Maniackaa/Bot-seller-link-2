@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from typing_extensions import Sequence
 
 from config_data.bot_conf import get_my_loggers, BASE_DIR
-from database.db import Session, User, Request, Link, WorkLinkRequest, WorkLink, CashOut
+from database.db import Session, User, Request, Link, CashOut
 
 logger, err_log = get_my_loggers()
 
@@ -76,14 +76,15 @@ def update_user(user: User, data: dict):
         err_log.error(f'Ошибка обновления юзера {user}: {err}')
 
 
-def create_request(user: User, text, source):
+def create_request(user: User, text, source, channel_name):
     logger.debug(f'Сохраняем запрос')
     session = Session()
     with session:
         request = Request(
             user_id=user.id,
             text=text,
-            source=source
+            source=source,
+            channel_name=channel_name
         )
         session.add(request)
         session.commit()
@@ -94,6 +95,12 @@ def create_request(user: User, text, source):
 def get_request_from_id(pk) -> Request:
     with Session() as session:
         req: Request = session.query(Request).filter(Request.id == pk).one_or_none()
+        return req
+
+
+def get_user_request_active(user_id) -> Sequence[Request]:
+    with Session() as session:
+        req: Request = session.query(Request).filter(Request.user_id == user_id, Request.status == 1).all()
         return req
 
 
@@ -111,13 +118,14 @@ def create_links(user: User, links: list):
         return link_ids
 
 
-def create_link(user: User, link, link_type):
+def create_link(user: User, link, link_type, request_id):
     session = Session()
     try:
         with session:
             link = Link(owner_id=user.id,
                         link=link,
-                        link_type=link_type
+                        link_type=link_type,
+                        request_id=request_id
                         )
             session.add(link)
             session.commit()
@@ -127,26 +135,26 @@ def create_link(user: User, link, link_type):
         logger.error(err)
 
 
-def create_work_link_request(user: User):
-    session = Session()
-    with session:
-        work = WorkLinkRequest(owner_id=user.id)
-        session.add(work)
-        session.commit()
-        logger.debug('Запрос сохранен')
-        return work.id
-
-
-def create_work_link(user_id, link, moderator_id):
-    session = Session()
-    with session:
-        work = WorkLink(worker_id=user_id,
-                        link=link,
-                        moderator_id=moderator_id)
-        session.add(work)
-        session.commit()
-        logger.debug('Запрос сохранен')
-        return work.id
+# def create_work_link_request(user: User):
+#     session = Session()
+#     with session:
+#         work = WorkLinkRequest(owner_id=user.id)
+#         session.add(work)
+#         session.commit()
+#         logger.debug('Запрос сохранен')
+#         return work.id
+#
+#
+# def create_work_link(user_id, link, moderator_id):
+#     session = Session()
+#     with session:
+#         work = WorkLink(worker_id=user_id,
+#                         link=link,
+#                         moderator_id=moderator_id)
+#         session.add(work)
+#         session.commit()
+#         logger.debug('Запрос сохранен')
+#         return work.id
 
 
 def get_link_from_id(pk) -> Link:
@@ -167,12 +175,12 @@ def get_reg_from_id(pk) -> Request:
         return reg
 
 
-def get_work_request_from_id(pk) -> WorkLinkRequest:
-    session = Session()
-    with session:
-        q = select(WorkLinkRequest).filter(WorkLinkRequest.id == pk)
-        reg = session.execute(q).scalars().one_or_none()
-        return reg
+# def get_work_request_from_id(pk) -> WorkLinkRequest:
+#     session = Session()
+#     with session:
+#         q = select(WorkLinkRequest).filter(WorkLinkRequest.id == pk)
+#         reg = session.execute(q).scalars().one_or_none()
+#         return reg
 
 
 def create_cash_outs(user_id, cost, trc20) -> int:
@@ -277,8 +285,8 @@ if __name__ == '__main__':
     # print(r)
     # r.set('reject_text', 'text')
     # asyncio.run(update_operation_in(['оступле333ние 1']))
-    save_stat_to_df()
-
+    # save_stat_to_df()
+    print(get_user_request_active(1))
 
 
 

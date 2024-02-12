@@ -13,13 +13,9 @@ from database.db import User
 from handlers.chat_handlers import IsFromGroup
 from keyboards.keyboards import start_kb, admin_start_kb, custom_kb
 from lexicon.lexicon import LEXICON
-from services.db_func import get_or_create_user, get_user_from_id, update_user, get_request_from_id, get_link_from_id, \
-    get_reg_from_id, get_work_request_from_id, create_work_link
-from services.func import get_users_with_uncofirmed_link, get_user_uncofirmed_link, get_unconfirmed_reg, \
-    get_unconfirmed_work_req
+from services.db_func import get_or_create_user
 
 logger, err_log = get_my_loggers()
-
 
 class IsAdminPrivate(BaseFilter):
     def __init__(self) -> None:
@@ -50,7 +46,6 @@ router.callback_query.filter(or_f(IsFromGroup(), IsAdminPrivate()))
 class FSMAdminLink(StatesGroup):
     confirm = State()
     reject = State()
-
 
 
 @router.callback_query(F.data == 'cancel')

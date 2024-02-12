@@ -14,9 +14,8 @@ from database.db import User
 from handlers.new_user import FSMCheckUser, FSMAnket
 from keyboards.keyboards import start_kb, contact_kb, admin_start_kb, custom_kb, menu_kb, kb_list
 from lexicon.lexicon import LEXICON
-from services.db_func import get_or_create_user, update_user, create_links, get_link_from_id, create_work_link_request, \
-    get_work_request_from_id, create_cash_outs, get_cash_out_from_id, create_link
-from services.func import get_all_time_cash, get_all_worked_link
+from services.db_func import get_or_create_user, update_user, create_links, get_link_from_id, create_cash_outs, \
+    get_cash_out_from_id, create_link, get_user_request_active
 
 logger, err_log = get_my_loggers()
 
@@ -44,6 +43,7 @@ class FSMUser(StatesGroup):
     send_link = State()
     input_date = State()
 
+
 class FSMCash(StatesGroup):
     cost = State()
 
@@ -51,6 +51,8 @@ class FSMCash(StatesGroup):
 @router.callback_query(F.data == 'support')
 async def support(callback: CallbackQuery, state: FSMContext, bot: Bot):
     text = LEXICON.get('support')
+    user = get_or_create_user()
+    await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=f'Запрос на связь от юзера {user}')
     await callback.message.edit_text(text, reply_markup=start_kb)
 
 # @router.message(F.text == kb_list[4])
@@ -75,7 +77,23 @@ async def support(callback: CallbackQuery, state: FSMContext, bot: Bot):
 
 @router.callback_query(F.data == 'send_link')
 async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    user = get_or_create_user(callback.from_user)
+    active_requests = get_user_request_active(user.id)
+    kb = {}
+    text = 'Список ваших каналов:\n'
+    for req in active_requests:
+        text += f'{req.id}. {req.channel_name}\n\n'
+        kb[f'{req.id}. {req.channel_name[:30]}'] = f'send_link:{req.id}'
+
+    await callback.message.edit_text('Выберите канал', reply_markup=custom_kb(1, kb))
+    await state.set_state(FSMUser.send_link)
+
+
+@router.callback_query(F.data.startswith('send_link:'))
+async def send_link(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.message.delete()
+    channel_id = int(callback.data.split('send_link:')[1])
+    await state.update_data(channel_id=channel_id)
     await callback.message.answer('Вставьте ссылку')
     await state.set_state(FSMUser.send_link)
 
@@ -90,6 +108,7 @@ async def receive_link(message: Message, state: FSMContext, bot: Bot):
     link = message.text.strip()
     if 'http' in link:
         await state.update_data(link=link)
+        data = await state.get_data()
         user = get_or_create_user(message.from_user)
         link_type = ''
         if 'tiktok.com' in link:
@@ -98,7 +117,8 @@ async def receive_link(message: Message, state: FSMContext, bot: Bot):
             link_type = 'instagram'
         elif 'youtube.com' in link:
             link_type = 'youtube'
-        link_id = create_link(user, link, link_type)
+        request_id = data.get('channel_id')
+        link_id = create_link(user, link, link_type, request_id)
         if not link_type:
             await message.answer('Некорректная ссылка')
             await state.clear()
@@ -109,7 +129,7 @@ async def receive_link(message: Message, state: FSMContext, bot: Bot):
             return
         # Отправка на модерацию:
         link = get_link_from_id(link_id)
-        text = f'Юзер @{user.username or user.tg_id} выпустил новый ролик.\n{link.link}'
+        text = f'Юзер @{user.username or user.tg_id} выпустил новый ролик.\n{link.link}\nКанал: {link.request.channel_name}'
         # btn = {'Подтвердить': f'link_confirm_{link_id}', 'Отклонить': f'link_reject_{link_id}'}
         # msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text, reply_markup=custom_kb(2, btn))
         msg = await bot.send_message(chat_id=conf.tg_bot.GROUP_ID, text=text)

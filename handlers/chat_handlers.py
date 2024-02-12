@@ -3,6 +3,7 @@ import json
 
 from aiogram import Router, Bot, F
 from aiogram.enums import ChatMemberStatus
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter, BaseFilter, or_f
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -12,8 +13,7 @@ from config_data.bot_conf import get_my_loggers, conf
 from database.db import User, LinkMenu, WebUserMenu
 from keyboards.keyboards import start_kb, menu_kb, admin_start_kb, custom_kb, not_auth_start_kb
 from lexicon.lexicon import LEXICON
-from services.db_func import get_or_create_user, get_user_from_id, update_user, get_request_from_id, get_link_from_id, \
-    get_work_request_from_id, create_work_link, get_cash_out_from_id, get_reg_from_id, create_cash_outs
+from services.db_func import get_or_create_user, get_user_from_id, update_user, get_request_from_id, get_link_from_id, get_cash_out_from_id, get_reg_from_id, create_cash_outs
 from services.func import get_unconfirmed_reg, get_users_with_uncofirmed_link
 
 logger, err_log = get_my_loggers()
@@ -92,6 +92,7 @@ async def process_start_command(message: Message, state: FSMContext, bot: Bot):
 
 class FSMAdminReg(StatesGroup):
     confirm = State()
+    set_cpm = State()
     reject = State()
 
 
@@ -108,7 +109,7 @@ class FSMAdminReg(StatesGroup):
 #     btn['Отмена'] = 'cancel'
 #     await callback.message.edit_text(text=text, reply_markup=custom_kb(2, btn))
 
-
+# Заявки на НОВЫЙ КАНАЛ из админки
 @router.callback_query(F.data == 'reg_list')
 async def reg_list(callback: CallbackQuery, state: FSMContext, bot: Bot):
     logger.debug('reg_list')
@@ -146,7 +147,7 @@ async def reject_reg(callback: CallbackQuery, state: FSMContext, bot: Bot):
 
 
 @router.message(StateFilter(FSMAdminReg.reject))
-async def operation_cost(message: Message, state: FSMContext, bot: Bot):
+async def reject(message: Message, state: FSMContext, bot: Bot):
     reject_text = message.text.strip()
     data = await state.get_data()
     request_id = data['request_id']
@@ -158,50 +159,84 @@ async def operation_cost(message: Message, state: FSMContext, bot: Bot):
     msg = Message(**json.loads(reg.msg))
     msg = Message.model_validate(msg).as_(bot)
     await state.clear()
-    await bot.send_message(chat_id=client.tg_id, text=f'Ваша заяка отклонена:\n{reject_text}')
+    await bot.send_message(chat_id=client.tg_id, text=f'Ваша заяка на канал № {request_id} отклонена:\n{reject_text}')
     await message.answer(text=f'Заявка {reg.id} {reg.owner.username} отклонена\n', reply_markup=admin_start_kb)
     await state.clear()
     await msg.edit_text(text=msg.text + f'<b>\n\nОтклонено {message.from_user.username or message.from_user.id}\n{reject_text}</b>')
 
 
 @router.callback_query(F.data.startswith('confirm_reg:'))
-async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+async def req_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.delete()
     logger.debug(callback.data)
     request_id = int(callback.data.split('confirm_reg:')[-1])
+    await state.update_data(request_id=request_id)
     request = get_request_from_id(request_id)
     user = request.owner
-    update_user(user, {'is_active': 1})
-    request.set('status', 1)
-    await bot.send_message(chat_id=user.tg_id, text='Ваша заяка одобрена')
-    msg = Message(**json.loads(request.msg))
-    msg = Message.model_validate(msg).as_(bot)
-    btn = {}
-    # text = 'Заявки:\n'
-    # uncofirmed_reg = get_unconfirmed_reg()
-    # for reg in uncofirmed_reg:
-    #     text += f'{reg.id}. {reg.text}\n'
-    #     btn[f'Принять {reg.id} {reg.owner.username}'] = f'confirm_reg:{reg.id}'
-    #     btn[f'Отклонить {reg.id} {reg.owner.username}'] = f'reject_reg:{reg.id}'
-    # btn['Отмена'] = 'cancel'
-    await callback.message.edit_text(f'Заявка {request.id} {request.owner.username} одобрена', reply_markup=admin_start_kb)
-    await state.clear()
-    await msg.edit_text(text=msg.text + f'<b>\n\nОдобрено</b> {callback.from_user.username or callback.from_user.id}')
+    await callback.message.answer(f'Укажитe CPM для заявки {request_id} юзера {user}')
+    await state.set_state(FSMAdminReg.set_cpm)
 
 
-# ----------------Подтверждение заявки из группы-----------------
+@router.message(StateFilter(FSMAdminReg.set_cpm))
+async def select_cpm(message: Message, state: FSMContext, bot: Bot):
+    try:
+        cpm = message.text.strip()
+        cpm = float(cpm)
+        await state.update_data(cpm=cpm)
+        data = await state.get_data()
+        request_id = data.get('request_id')
+        request = get_request_from_id(request_id)
+        user = request.owner
+        update_user(user, {'is_active': 1})
+        request.set('status', 1)
+        request.set('cpm', cpm)
+        await bot.send_message(chat_id=user.tg_id, text=f'Ваша заяка  {request.id} одобрена')
+        # msg = Message(**json.loads(request.msg))
+        # msg = Message.model_validate(msg).as_(bot)
+        # btn = {}
+        # text = 'Заявки:\n'
+        # uncofirmed_reg = get_unconfirmed_reg()
+        # for reg in uncofirmed_reg:
+        #     text += f'{reg.id}. {reg.text}\n'
+        #     btn[f'Принять {reg.id} {reg.owner.username}'] = f'confirm_reg:{reg.id}'
+        #     btn[f'Отклонить {reg.id} {reg.owner.username}'] = f'reject_reg:{reg.id}'
+        # btn['Отмена'] = 'cancel'
+        # await callback.message.edit_text(f'Заявка {request.id} {request.owner.username} одобрена',
+        #                                  reply_markup=admin_start_kb)
+        await state.clear()
+        # await msg.edit_text(
+        #     text=msg.text + f'<b>\n\nОдобрено</b> {callback.from_user.username or callback.from_user.id}')
+        await message.answer(f'Заявка {request.id} одобрена')
+    except ValueError:
+        await message.answer('Введите корректное число')
+
+
+# ----------------Подтверждение заявки на канал из группы-----------------
 class FSMConfirmRequest(StatesGroup):
     select_cpm = State()
-    write_channel = State()
+    # write_channel = State()
 
 
 @router.callback_query(F.data.startswith('confirm_user_'))
 async def in_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    await callback.message.delete()
+    await callback.message.edit_reply_markup(reply_markup=None)
     logger.debug(callback.data)
     request_id = int(callback.data.split('confirm_user_')[-1])
     await callback.message.answer('Укажите CPM')
     await state.set_state(FSMConfirmRequest.select_cpm)
     await state.update_data(request_id=request_id, message=callback.message, callback=callback)
+
+#
+# @router.message(StateFilter(FSMConfirmRequest.select_cpm))
+# async def select_cpm(message: Message, state: FSMContext, bot: Bot):
+#     try:
+#         cpm = message.text.strip()
+#         cpm = float(cpm)
+#         await state.update_data(cpm=cpm)
+#         await message.answer('Укажите список каналов')
+#         await state.set_state(FSMConfirmRequest.write_channel)
+#     except ValueError:
+#         await message.answer('Введите корректное число')
 
 
 @router.message(StateFilter(FSMConfirmRequest.select_cpm))
@@ -210,35 +245,72 @@ async def select_cpm(message: Message, state: FSMContext, bot: Bot):
         cpm = message.text.strip()
         cpm = float(cpm)
         await state.update_data(cpm=cpm)
-        await message.answer('Укажите список каналов')
-        await state.set_state(FSMConfirmRequest.write_channel)
+        data = await state.get_data()
+        request_id = data.get('request_id')
+        request = get_request_from_id(request_id)
+        user = get_user_from_id(request.user_id)
+        data = await state.get_data()
+        cpm = data.get('cpm')
+        update_user(user, {'is_active': 1})
+        request.set('status', 1)
+        request.set('cpm', cpm)
+        await bot.send_message(chat_id=user.tg_id,
+                               text=f'Мы готовы предложить Вам сотрудничество по ставке {cpm} рублей за тысячу просмотров с каналом: {request.channel_name}\n\nТеперь, когда Вы будете выкладывать видео, вы должны в тот же день скидывать видео в этот чат. Для этого нажмите на кнопку “Отправить ссылку”.')
+        await bot.send_message(chat_id=user.tg_id,
+                               text='https://drive.google.com/drive/folders/1NWUx7VkKpa9ySTeNkojyho-vnj8RjEdj?usp=sharing',
+                               reply_markup=start_kb)
+        # message: Message = data.get('message')
+        # callback: CallbackQuery = data.get('callback')
+        # await bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=message.message_id, reply_markup=None)
+        # await bot.edit_message_text(
+        #     text=message.text + f'<b>\n\nОдобрено</b> {callback.from_user.username or callback.from_user.id}',
+        #     chat_id=callback.message.chat.id,
+        #     message_id=message.message_id)
+        message: Message = data.get('message')
+
+        msg = Message(**json.loads(request.msg))
+        msg = Message.model_validate(msg).as_(bot)
+        try:
+            await bot.edit_message_reply_markup(chat_id=msg.chat.id, message_id=msg.message_id, reply_markup=None)
+        except TelegramBadRequest:
+            pass
+
+        await bot.edit_message_text(
+            text=msg.text + f'<b>\n\nОдобрено</b> {message.from_user.username or message.from_user.id}',
+            chat_id=msg.chat.id,
+            message_id=msg.message_id)
+        await message.answer('Заявка на канал одобрена')
+        await state.clear()
     except ValueError:
         await message.answer('Введите корректное число')
 
 
-@router.message(StateFilter(FSMConfirmRequest.write_channel))
-async def write_channel(message: Message, state: FSMContext, bot: Bot):
-    channels = message.text.strip()
-    await state.update_data(channels=channels)
-    data = await state.get_data()
-    request_id = data.get('request_id')
-    request = get_request_from_id(request_id)
-    user = get_user_from_id(request.user_id)
-    data = await state.get_data()
-    cpm = data.get('cpm')
-    update_user(user, {'is_active': 1, 'cpm': cpm, 'source': request.source })
-    request.set('status', 1)
-    await bot.send_message(chat_id=user.tg_id, text=f'Мы готовы предложить Вам сотрудничество по ставке {cpm} рублей за тысячу просмотров с каналами:\n{channels}\n\nТеперь, когда вы будете выкладывать видео, вы должны их скинуть в этот чат и указать дату на момент выкладки ролика в формате (01.01.2024)')
-    await bot.send_message(chat_id=user.tg_id,
-                           text='https://drive.google.com/drive/folders/1NWUx7VkKpa9ySTeNkojyho-vnj8RjEdj?usp=sharing',
-                           reply_markup=start_kb)
-    message: Message = data.get('message')
-    callback: CallbackQuery = data.get('callback')
-    await bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=message.message_id, reply_markup=None)
-    await bot.edit_message_text(text=message.text + f'<b>\n\nОдобрено</b> {callback.from_user.username or callback.from_user.id}',
-                                chat_id=callback.message.chat.id,
-                                message_id=message.message_id)
-    await state.clear()
+
+
+
+# @router.message(StateFilter(FSMConfirmRequest.write_channel))
+# async def write_channel(message: Message, state: FSMContext, bot: Bot):
+#     channels = message.text.strip()
+#     await state.update_data(channels=channels)
+#     data = await state.get_data()
+#     request_id = data.get('request_id')
+#     request = get_request_from_id(request_id)
+#     user = get_user_from_id(request.user_id)
+#     data = await state.get_data()
+#     cpm = data.get('cpm')
+#     update_user(user, {'is_active': 1, 'cpm': cpm, 'source': request.source })
+#     request.set('status', 1)
+#     await bot.send_message(chat_id=user.tg_id, text=f'Мы готовы предложить Вам сотрудничество по ставке {cpm} рублей за тысячу просмотров с каналами:\n{channels}\n\nТеперь, когда вы будете выкладывать видео, вы должны их скинуть в этот чат и указать дату на момент выкладки ролика в формате (01.01.2024)')
+#     await bot.send_message(chat_id=user.tg_id,
+#                            text='https://drive.google.com/drive/folders/1NWUx7VkKpa9ySTeNkojyho-vnj8RjEdj?usp=sharing',
+#                            reply_markup=start_kb)
+#     message: Message = data.get('message')
+#     callback: CallbackQuery = data.get('callback')
+#     await bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=message.message_id, reply_markup=None)
+#     await bot.edit_message_text(text=message.text + f'<b>\n\nОдобрено</b> {callback.from_user.username or callback.from_user.id}',
+#                                 chat_id=callback.message.chat.id,
+#                                 message_id=message.message_id)
+#     await state.clear()
 
 
 @router.callback_query(F.data.startswith('reject_user_'))
@@ -257,7 +329,7 @@ async def reject(callback: CallbackQuery, state: FSMContext, bot: Bot):
     request.set('status', -1)
     reject_text = ''
     request.set('reject_text', reject_text)
-    await bot.send_message(chat_id=client.tg_id, text=f'К сожалению мы не готовы предложить вам сотрудничество')
+    await bot.send_message(chat_id=client.tg_id, text=f'К сожалению мы не готовы предложить вам сотрудничество по каналу {request.channel_name}')
     await msg.edit_text(text=msg.text + f'<b>\n\nОтклонено {callback.message.from_user.username or callback.message.from_user.id}\n{reject_text}</b>')
     await state.clear()
 # ----------------Конец Подтверждение заявки-----------------
