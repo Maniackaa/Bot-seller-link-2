@@ -271,7 +271,7 @@ def save_stat_to_df():
                 rows.append(row)
             df_to_save = pd.DataFrame(data=rows, index=None, columns=columns)
             with pd.ExcelWriter(path, engine="openpyxl", mode="a") as writer:
-                df_to_save.to_excel(writer, sheet_name=str(f'{user.username} ({user.cpm})'), index=False, startrow=0, startcol=0)
+                df_to_save.to_excel(writer, sheet_name=str(f'{user.username}'), index=False, startrow=0, startcol=0)
 
 
 if __name__ == '__main__':
